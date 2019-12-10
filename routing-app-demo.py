@@ -9,6 +9,9 @@ import getopt
 import numpy as np
 from datetime import datetime
 from socket import *
+import fcntl, os
+import errno
+from time import sleep
 
 REMOTE_HOST = '127.0.0.1'
 LTE_PORT = 60000
@@ -24,30 +27,79 @@ def main():
     print 'commandline parameters:'
     print 'argv:', argv
     print 'opts:', opts
-    for o in opts:
-    	if o in ("-h", "--help"):
+    for name, value in opts:
+        if name in ("-h", "--help"):
 	    helpInfo()
+            exit()
 
-    robotControlSocket = socket(AF_INET, SOCK_DGRAM)
-    robotControlSocket.bind((REMOTE_HOST, LTE_PORT))
+    lteSocket = socket(AF_INET, SOCK_DGRAM)
+    lteSocket.bind((REMOTE_HOST, LTE_PORT))
+    lteSocket.setblocking(False)
+
+    wifiSocket = socket(AF_INET, SOCK_DGRAM)
+    wifiSocket.bind((REMOTE_HOST, WIFI_PORT))
+    wifiSocket.setblocking(False)
+
+    fgSocket = socket(AF_INET, SOCK_DGRAM)
+    fgSocket.bind((REMOTE_HOST, FG_PORT))
+    fgSocket.setblocking(False)
+
     while True:
-        data, addr = robotControlSocket.recvfrom(bufsize)
-        print 'receive', len(data), 'bytes from', addr, ':', data
+        # try to receive from lte socket
+        try:
+            data, addr = lteSocket.recvfrom(bufsize)
+        except error, e:
+            err = e.args[0]
+            if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
+                pass
+            else:
+                # a "real" error occurred
+                print e
+                sys.exit(1)
+        else:
+            print 'receive', len(data), 'bytes from', addr, ':', data
 
+        # try to receive from wifi socket
+        try:
+            data, addr = wifiSocket.recvfrom(bufsize)
+        except error, e:
+            err = e.args[0]
+            if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
+                pass
+            else:
+                # a "real" error occurred
+                print e
+                sys.exit(1)
+        else:
+            print 'receive', len(data), 'bytes from', addr, ':', data
 
+        # try to receive from 5g socket
+        try:
+            data, addr = fgSocket.recvfrom(bufsize)
+        except error, e:
+            err = e.args[0]
+            if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
+                pass
+            else:
+                # a "real" error occurred
+                print e
+                sys.exit(1)
+        else:
+            print 'receive', len(data), 'bytes from', addr, ':', data
 
 
 
 #===========================================
-def bubbleSort(dataIndex, memory):
+def forward(rat):
 #===========================================
-    print 'a function'
+    # TODO: implement forwarding functionality
+    pass
 
 
 #===========================================
 def helpInfo():
 #===========================================
-    print 'input argument error, please input the side lengths of 2 triangles'
+    print 'Usage:'
 
 if __name__ == '__main__':
     main()

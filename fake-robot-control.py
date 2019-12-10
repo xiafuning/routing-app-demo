@@ -15,45 +15,58 @@ LTE_PORT = 60000
 WIFI_PORT = 60001
 FG_PORT = 60002
 
+NUM_PKTS = 500
+
 #===========================================
 def main():
 #===========================================
-    opts, argv = getopt.getopt(sys.argv[1:],'hlwf',['help', 'lte', 'wifi', 'fiveg'])	
+    opts, argv = getopt.getopt(sys.argv[1:],'-h-l-w-f',['help', 'lte', 'wifi', 'fiveg'])
     print 'commandline parameters:'
     print 'argv:', argv
     print 'opts:', opts
-    for o in opts:
-    	if o in ("-h", "--help"):
+
+    if len(opts) == 0:
+        helpInfo()
+        exit()
+    for name, value in opts:
+        if name in ("-h", "--help"):
 	    helpInfo()
             exit()
-    	if o in ("-l", "--lte"):
+        if name in ("-l", "--lte"):
+            send('lte')
             exit()
-	if o in ("-w", "--wifi"):
+        if name in ("-w", "--wifi"):
+            send('wifi')
             exit()
-	if o in ("-f", "--fiveg"):
+        if name in ("-f", "--fiveg"):
+            send('5g')
             exit()
+    helpInfo()
+    exit()
 
 
-
-	
-
-
-
-
+#===========================================
+def send(rat):
+#===========================================
     robotControlSocket = socket(AF_INET, SOCK_DGRAM)
-    data = 'a message'
-    numBytesTx = robotControlSocket.sendto(data, (REMOTE_HOST, 60000))
-    print 'send', numBytesTx, 'bytes'
-#===========================================
-def bubbleSort(dataIndex, memory):
-#===========================================
-    print 'a function'
+    if rat == 'lte':
+        for seq in range(NUM_PKTS):
+            data = 'lte' + str(seq) + 'message'
+            numBytesTx = robotControlSocket.sendto(data, (REMOTE_HOST, LTE_PORT))
+    elif rat == 'wifi':
+        for seq in range(NUM_PKTS):
+            data = 'wifi' + str(seq) + 'message'
+            numBytesTx = robotControlSocket.sendto(data, (REMOTE_HOST, WIFI_PORT))
+    elif rat == '5g':
+        for seq in range(NUM_PKTS):
+            data = '5g' + str(seq) + 'message'
+            numBytesTx = robotControlSocket.sendto(data, (REMOTE_HOST, FG_PORT))
 
 
 #===========================================
 def helpInfo():
 #===========================================
-    print 'usage:'
+    print 'Usage: [ -l --lte ] [-w --wifi] [-f --fiveg]'
 
 if __name__ == '__main__':
     main()
