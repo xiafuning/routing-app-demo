@@ -10,10 +10,16 @@ import numpy as np
 from datetime import datetime
 from socket import *
 import thread
+import threading
 import time
+import fcntl, os
+import errno
 
-REMOTE_HOST = '127.0.0.1'
+#REMOTE_HOST = '127.0.0.1'
+REMOTE_HOST = gethostname()
 NUM_PKTS = 5
+BUFSIZE = 8096
+TEST_MODE = False
 
 #===========================================
 def main():
@@ -22,85 +28,116 @@ def main():
     print 'commandline parameters:'
     print 'argv:', argv
     print 'opts:', opts
-
+    if len(opts) == 0:
+        helpInfo()
+        exit()
     for name, value in opts:
-        if name in ("-h", "--help"):
+        if name in ('h', '--help'):
 	    helpInfo()
             exit()
-        if name in ("-d", "--downlink"):
-            print 'enter d'
-            thread.start_new_thread(bs, (True, ))
-            thread.start_new_thread(ts, (False, ))
-        if name in ("-u", "--uplink"):
-	    thread.start_new_thread(bs, (False, ))
-            thread.start_new_thread(ts, (True, ))
-        if name in ("-m", "--mix"):
-            thread.start_new_thread(bs, (True, ))
-            thread.start_new_thread(ts, (True, ))
+        if name in ('-d', '--downlink'):
+            bsThread = threading.Thread(target=station, args=(('BS', True, )), name='bsThread')
+            tsThread = threading.Thread(target=station, args=(('TS', False, )), name='tsThread')
+            bsThread.start()
+            tsThread.start()
+        if name in ('-u', '--uplink'):
+            bsThread = threading.Thread(target=station, args=(('BS', False, )), name='bsThread')
+            tsThread = threading.Thread(target=station, args=(('TS', True, )), name='tsThread')
+            bsThread.start()
+            tsThread.start()
+        if name in ('-m', '--mix'):
+            bsThread = threading.Thread(target=station, args=(('BS', True, )), name='bsThread')
+            tsThread = threading.Thread(target=station, args=(('TS', True, )), name='tsThread')
+            bsThread.start()
+            tsThread.start()
+    while True:
+        pass
 
+#===========================================
+def station(devType, sendEnable):
+#===========================================
+    # socket init
+    if devType == 'BS':
+        print 'start BS APP with sendEnable =', sendEnable
+        rxPort = 8000
+        if TEST_MODE == True:
+            txPort = 9000
+        else:
+            txPort = 4000
+        decisionPort = 12321
+    elif devType == 'TS':
+        print 'start TS APP with sendEnable =', sendEnable
+        rxPort = 9000
+        if TEST_MODE == True:
+            txPort = 8000
+        else:
+            txPort = 3000
+        decisionPort = 23432
+ 
+    # start rx thread
+    thread.start_new_thread(rxLoop, (devType, rxPort, ))
+
+    if sendEnable == True:
+        txSocket = socket(AF_INET, SOCK_DGRAM)
+        decision = 'lte'
+        txSocket.sendto(decision, (REMOTE_HOST, decisionPort))
+        sendData(decision, txPort)
+        
+        decision = 'wifi'
+        txSocket.sendto(decision, (REMOTE_HOST, decisionPort))
+        sendData(decision, txPort)
+       
+        decision = '5g'
+        txSocket.sendto(decision, (REMOTE_HOST, decisionPort))
+        sendData(decision, txPort)
+    
     while True:
         pass
 
 
 #===========================================
-def bs(sendEnable):
+def rxLoop(devType, port):
 #===========================================
-    # socket init
-    print 'start bs with sendEnable =', sendEnable
-    bsRxPort = 8000
-    bsTxPort = 4000
-    bsDecisionPort = 6000
-    
-    bsTxSocket = socket(AF_INET, SOCK_DGRAM)
-    bsRxSocket = socket(AF_INET, SOCK_DGRAM)
-    bsRxSocket.bind((REMOTE_HOST, bsRxPort))
-
-    decision = 'lte'
-    bsTxSocket.sendto(decision, (REMOTE_HOST, bsDecisionPort))
-    for seq in range(NUM_PKTS):
-        data = decision + str(seq) + 'message'
-        bsTxSocket.sendto(data, (REMOTE_HOST, bsTxPort))
-
-    time.sleep(1)
-    print 'bs end'
-
-#===========================================
-def ts(sendEnable):
-#===========================================
-    # socket init
-    print 'start ts with sendEnable =', sendEnable
-    tsSocket = socket(AF_INET, SOCK_DGRAM)
-    tsDecisionSocket = socket(AF_INET, SOCK_DGRAM)
-    time.sleep(1)
-    print 'ts end'
-
-
+    rxSocket = socket(AF_INET, SOCK_DGRAM)
+    rxSocket.bind((REMOTE_HOST, port))
+    rxSocket.setblocking(False)
+    while True:
+        try:
+            data, addr = rxSocket.recvfrom(BUFSIZE)
+        except error, e:
+            err = e.args[0]
+            if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
+                pass
+            else:
+                # a "real" error occurred
+                print e
+                sys.exit(1)
+        else:
+            print devType, 'receive', len(data), 'bytes from', addr, ':', data
 
 
 #===========================================
-def send(rat):
+def sendData(rat, port):
 #===========================================
-    robotControlSocket = socket(AF_INET, SOCK_DGRAM)
+    txSocket = socket(AF_INET, SOCK_DGRAM)
     if rat == 'lte':
         for seq in range(NUM_PKTS):
             data = 'lte' + str(seq) + 'message'
-            numBytesTx = robotControlSocket.sendto(data, (REMOTE_HOST, LTE_PORT))
+            numBytesTx = txSocket.sendto(data, (REMOTE_HOST, port))
     elif rat == 'wifi':
         for seq in range(NUM_PKTS):
             data = 'wifi' + str(seq) + 'message'
-            numBytesTx = robotControlSocket.sendto(data, (REMOTE_HOST, WIFI_PORT))
+            numBytesTx = txSocket.sendto(data, (REMOTE_HOST, port))
     elif rat == '5g':
         for seq in range(NUM_PKTS):
             data = '5g' + str(seq) + 'message'
-            numBytesTx = robotControlSocket.sendto(data, (REMOTE_HOST, FG_PORT))
+            numBytesTx = txSocket.sendto(data, (REMOTE_HOST, port))
 
 
 #===========================================
 def helpInfo():
 #===========================================
-    print 'Usage: [ -l --lte ] [-w --wifi] [-f --fiveg]'
+    print 'Usage: [-h --help] [-d --downlink] [-u --uplink] [-m --mix]'
 
 if __name__ == '__main__':
     main()
-
-
