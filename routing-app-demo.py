@@ -44,20 +44,27 @@ def routing(devType):
         print 'start BS routing app'
         listenDataPort = 4000
         listenDecisionPort = 12321
-        ltePort = 8990
-        wifiPort = 8991
-        fgPort = 8992
+        ltePortTx = 8990
+        wifiPortTx = 8991
+        fgPortTx = 8992
+        ltePortRx = 7990
+        wifiPortRX = 7991
+        fgPortRx = 7992
         rxFwdPort = 8000
     elif devType == 'TS':
         print 'start TS routing app'
         listenDataPort = 3000
         listenDecisionPort = 23432
-        ltePort = 7990
-        wifiPort = 7991
-        fgPort = 7992
+        ltePortTx = 7990
+        wifiPortTx = 7991
+        fgPortTx = 7992
+        ltePortRx = 8990
+        wifiPortRX = 8991
+        fgPortRx = 8992
         rxFwdPort = 9000
 
-    ulThread = threading.Thread(target=ulForward, args=(ltePort, wifiPort, fgPort, rxFwdPort, ))
+    ulThread = threading.Thread(target=ulForward, args=(ltePortRx, wifiPortRX, fgPortRx, rxFwdPort, ))
+    ulThread.start()
 
     # set default rat
     decision = 'lte'
@@ -83,8 +90,8 @@ def routing(devType):
                 print e
                 sys.exit(1)
         else:
-            print devType, 'forward the packet using', decision
-            sendData(data, decision, ltePort, wifiPort, fgPort)
+            print devType, 'forward a packet using', decision
+            sendData(data, decision, ltePortTx, wifiPortTx, fgPortTx)
 
         # try to receive a decision packet
         try:
@@ -102,18 +109,18 @@ def routing(devType):
             decision = data
 
 #===========================================
-def ulForward(ltePort, wifiPort, fgPort, rxFwdPort):
+def ulForward(ltePortRx, wifiPortRX, fgPortRx, rxFwdPort):
 #===========================================
     lteSocket = socket(AF_INET, SOCK_DGRAM)
-    lteSocket.bind((REMOTE_HOST, ltePort))
+    lteSocket.bind((REMOTE_HOST, ltePortRx))
     lteSocket.setblocking(False)
 
     wifiSocket = socket(AF_INET, SOCK_DGRAM)
-    wifiSocket.bind((REMOTE_HOST, wifiPort))
+    wifiSocket.bind((REMOTE_HOST, wifiPortRX))
     wifiSocket.setblocking(False)
 
     fgSocket = socket(AF_INET, SOCK_DGRAM)
-    fgSocket.bind((REMOTE_HOST, fgPort))
+    fgSocket.bind((REMOTE_HOST, fgPortRx))
     fgSocket.setblocking(False)
 
     rxFwdSocket = socket(AF_INET, SOCK_DGRAM)
@@ -121,7 +128,7 @@ def ulForward(ltePort, wifiPort, fgPort, rxFwdPort):
     while True:
         # try to receive from lte socket
         try:
-            data, addr = lteSocket.recvfrom(bufsize)
+            data, addr = lteSocket.recvfrom(BUFSIZE)
         except error, e:
             err = e.args[0]
             if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
@@ -136,7 +143,7 @@ def ulForward(ltePort, wifiPort, fgPort, rxFwdPort):
 
         # try to receive from wifi socket
         try:
-            data, addr = wifiSocket.recvfrom(bufsize)
+            data, addr = wifiSocket.recvfrom(BUFSIZE)
         except error, e:
             err = e.args[0]
             if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
@@ -151,7 +158,7 @@ def ulForward(ltePort, wifiPort, fgPort, rxFwdPort):
 
         # try to receive from 5g socket
         try:
-            data, addr = fgSocket.recvfrom(bufsize)
+            data, addr = fgSocket.recvfrom(BUFSIZE)
         except error, e:
             err = e.args[0]
             if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
@@ -166,15 +173,15 @@ def ulForward(ltePort, wifiPort, fgPort, rxFwdPort):
 
 
 #===========================================
-def sendData(data, rat, ltePort, wifiPort, fgPort):
+def sendData(data, rat, ltePortTx, wifiPortTx, fgPortTx):
 #===========================================
     txSocket = socket(AF_INET, SOCK_DGRAM)
     if rat == 'lte':
-        numBytesTx = txSocket.sendto(data, (REMOTE_HOST, ltePort))
+        numBytesTx = txSocket.sendto(data, (REMOTE_HOST, ltePortTx))
     elif rat == 'wifi':
-        numBytesTx = txSocket.sendto(data, (REMOTE_HOST, wifiPort))
+        numBytesTx = txSocket.sendto(data, (REMOTE_HOST, wifiPortTx))
     elif rat == '5g':
-        numBytesTx = txSocket.sendto(data, (REMOTE_HOST, fgPort))
+        numBytesTx = txSocket.sendto(data, (REMOTE_HOST, fgPortTx))
 
 
 #===========================================
