@@ -17,6 +17,10 @@ import threading
 REMOTE_HOST = '127.0.0.1'
 BUFSIZE = 8096 # Modify to suit your needs
 
+# set default rat
+decision = 'lte'
+
+
 #===========================================
 def main():
 #===========================================
@@ -43,7 +47,7 @@ def routing(devType):
     if devType == 'BS':
         print 'start BS routing app'
         listenDataPort = 4000
-        listenDecisionPort = 12321
+        listenDecisionPort = 6666
         ltePortTx = 8990
         wifiPortTx = 8991
         fgPortTx = 8992
@@ -54,7 +58,7 @@ def routing(devType):
     elif devType == 'TS':
         print 'start TS routing app'
         listenDataPort = 3000
-        listenDecisionPort = 23432
+        listenDecisionPort = 7777
         ltePortTx = 7990
         wifiPortTx = 7991
         fgPortTx = 7992
@@ -62,51 +66,33 @@ def routing(devType):
         wifiPortRX = 8991
         fgPortRx = 8992
         rxFwdPort = 9000
+ 
+    # set default rat
+    global decision
 
-    ulThread = threading.Thread(target=ulForward, args=(ltePortRx, wifiPortRX, fgPortRx, rxFwdPort, ))
+    # create uplink thread
+    ulThread = threading.Thread(target=ulForward, args=(ltePortRx, wifiPortRX, fgPortRx, rxFwdPort, ), name='ulThread')
+    ulThread.setDaemon(True)
     ulThread.start()
 
-    # set default rat
-    decision = 'lte'
+    # create downlink data thread
+    dlDataThread = threading.Thread(target=dlDataForward, args=(devType, listenDataPort, ltePortTx, wifiPortTx, fgPortTx, ), name='dlDataThread')
+    dlDataThread.setDaemon(True)
+    dlDataThread.start()
 
-    listenDataSocket = socket(AF_INET, SOCK_DGRAM)
-    listenDataSocket.bind((REMOTE_HOST, listenDataPort))
-    listenDataSocket.setblocking(False)
-
+    # listen for decision
     listenDecisionSocket = socket(AF_INET, SOCK_DGRAM)
     listenDecisionSocket.bind((REMOTE_HOST, listenDecisionPort))
-    listenDecisionSocket.setblocking(False)
+    #listenDecisionSocket.setblocking(False)
 
     while True:
-        # try to receive a data packet and forward it
-        try:
-            data, addr = listenDataSocket.recvfrom(BUFSIZE)
-        except error, e:
-            err = e.args[0]
-            if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
-                pass
-            else:
-                # a "real" error occurred
-                print e
-                sys.exit(1)
-        else:
-            print devType, 'forward a packet using', decision
-            sendData(data, decision, ltePortTx, wifiPortTx, fgPortTx)
-
-        # try to receive a decision packet
         try:
             data, addr = listenDecisionSocket.recvfrom(BUFSIZE)
-        except error, e:
-            err = e.args[0]
-            if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
-                pass
-            else:
-                # a "real" error occurred
-                print e
-                sys.exit(1)
-        else:
-            # update decision
             decision = data
+        except KeyboardInterrupt:
+            print "Sending kill to threads..."
+            exit()
+
 
 #===========================================
 def ulForward(ltePortRx, wifiPortRX, fgPortRx, rxFwdPort):
@@ -138,7 +124,7 @@ def ulForward(ltePortRx, wifiPortRX, fgPortRx, rxFwdPort):
                 print e
                 sys.exit(1)
         else:
-            print 'forward', len(data), 'bytes to', (REMOTE_HOST, rxFwdPort), ':', data
+            print 'forward', len(data), 'bytes to', (REMOTE_HOST, rxFwdPort)
             rxFwdSocket.sendto(data, (REMOTE_HOST, rxFwdPort))
 
         # try to receive from wifi socket
@@ -153,7 +139,7 @@ def ulForward(ltePortRx, wifiPortRX, fgPortRx, rxFwdPort):
                 print e
                 sys.exit(1)
         else:
-            print 'forward', len(data), 'bytes to', (REMOTE_HOST, rxFwdPort), ':', data
+            print 'forward', len(data), 'bytes to', (REMOTE_HOST, rxFwdPort)
             rxFwdSocket.sendto(data, (REMOTE_HOST, rxFwdPort))
 
         # try to receive from 5g socket
@@ -168,8 +154,21 @@ def ulForward(ltePortRx, wifiPortRX, fgPortRx, rxFwdPort):
                 print e
                 sys.exit(1)
         else:
-            print 'forward', len(data), 'bytes to', (REMOTE_HOST, rxFwdPort), ':', data
+            print 'forward', len(data), 'bytes to', (REMOTE_HOST, rxFwdPort)
             rxFwdSocket.sendto(data, (REMOTE_HOST, rxFwdPort))
+
+
+#===========================================
+def dlDataForward(devType, listenDataPort, ltePortTx, wifiPortTx, fgPortTx):
+#===========================================
+    global decision
+    listenDataSocket = socket(AF_INET, SOCK_DGRAM)
+    listenDataSocket.bind((REMOTE_HOST, listenDataPort))
+
+    while True:
+        data, addr = listenDataSocket.recvfrom(BUFSIZE)
+        print devType, 'forward a packet using', decision
+        sendData(data, decision, ltePortTx, wifiPortTx, fgPortTx)
 
 
 #===========================================
