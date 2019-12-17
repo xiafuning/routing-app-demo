@@ -14,6 +14,10 @@ import errno
 import time
 import threading
 
+# import TestMan modules
+from Server import UDP_Server
+from signalslot import Slot
+
 REMOTE_HOST = '127.0.0.1'
 BUFSIZE = 8096 # Modify to suit your needs
 
@@ -24,25 +28,39 @@ decision = 'lte'
 #===========================================
 def main():
 #===========================================
-    opts, argv = getopt.getopt(sys.argv[1:],'-h-b-t',['help', 'base', 'terminal'])	
+    opts, argv = getopt.getopt(sys.argv[1:],'-h-b-t',['help', 'base', 'terminal', 'testman'])	
     print 'commandline parameters:'
     print 'argv:', argv
     print 'opts:', opts
     if len(opts) == 0:
         helpInfo()
         exit()
+    
+    # cmd arguments initialization
+    devType = 'BS'
+    testmanEnabled = False
+    
     for name, value in opts:
         if name in ('-h', '--help'):
 	    helpInfo()
             exit()
-        if name in ('-b', '--base'):
-            routing('BS')
-        if name in ('-t', '--terminal'):
-            routing('TS')
+        elif name in ('-b', '--base'):
+            devType = 'BS'
+        elif name in ('-t', '--terminal'):
+            devType = 'TS'
+        elif name in ('--testman'):
+            testmanEnabled = True
+            print 'testman enabled'
+        else:
+            helpInfo()
+            exit()
+    
+    # run routing function
+    routing(devType, testmanEnabled)
 
 
 #===========================================
-def routing(devType):
+def routing(devType, testmanEnabled):
 #===========================================
     if devType == 'BS':
         print 'start BS routing app'
@@ -81,17 +99,39 @@ def routing(devType):
     dlDataThread.start()
 
     # listen for decision
-    listenDecisionSocket = socket(AF_INET, SOCK_DGRAM)
-    listenDecisionSocket.bind((REMOTE_HOST, listenDecisionPort))
-    #listenDecisionSocket.setblocking(False)
+    if testmanEnabled == False:
+        # use UDP socket
+        listenDecisionSocket = socket(AF_INET, SOCK_DGRAM)
+        listenDecisionSocket.bind((REMOTE_HOST, listenDecisionPort))
+        while True:
+            try:
+                data, addr = listenDecisionSocket.recvfrom(BUFSIZE)
+                decision = data
+            except KeyboardInterrupt:
+                print "Sending kill to threads..."
+                exit()
+    elif testmanEnabled == True:
+        # use TestMan
+        S = UDP_Server(ip="224.5.6.7", port=listenDecisionPort, ttl=1, type_=2, id_=1)
+        print("Server started..")
+        # Connect to packet receive callback handler.
+        S.packet_received.connect(Slot(testmanCallback))
+        print("Receive-Handler established")
+        while True:
+            try:
+                a = 1
+            except KeyboardInterrupt:
+                print "Sending kill to threads..."
+                exit()
 
-    while True:
-        try:
-            data, addr = listenDecisionSocket.recvfrom(BUFSIZE)
-            decision = data
-        except KeyboardInterrupt:
-            print "Sending kill to threads..."
-            exit()
+#===========================================
+def testmanCallback(packet):
+#===========================================
+    print("\n=== Received packet ==============")
+    # print type(packet.Command), packet.Command
+    global decision
+    decision = str(packet.Command)
+    print type(decision), decision
 
 
 #===========================================

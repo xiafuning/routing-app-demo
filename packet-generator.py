@@ -19,34 +19,41 @@ NUM_PKTS = 10
 #===========================================
 def main():
 #===========================================
-    opts, argv = getopt.getopt(sys.argv[1:],'-h-b-t',['help', 'base', 'terminal'])
+    opts, argv = getopt.getopt(sys.argv[1:],'-h-b-t',['help', 'base', 'terminal', 'testman'])
     print 'commandline parameters:'
     print 'argv:', argv
     print 'opts:',  opts
     if len(opts) == 0:
         helpInfo()
-        exit()
+        exit()    
+    
+    # cmd arguments initialization
+    devType = 'base'
+    testmanEnabled = False
+    
     for name, value in opts:
         if name in ("-h", "--help"):
 	    helpInfo()
             exit()
         if name in ("-b", "--base"):
-            station('base')
-            exit()
+            devType = 'base'
         if name in ("-t", "--terminal"):
-            station('terminal')
-            exit()
+            devType = 'terminal'
+        if name in ('--testman'):
+            testmanEnabled = True
+
+    station(devType, testmanEnabled)
 
 
 #===========================================
-def station(station):
+def station(devType, testmanEnabled):
 #===========================================
-    print 'running as', station, 'station'
-    if station == 'base':
+    print 'running as', devType, 'station'
+    if devType == 'base':
         txPort = 4000
         rxPort = 8000
         decisionPort = 6666
-    elif station == 'terminal':
+    elif devType == 'terminal':
         txPort = 3000
         rxPort = 9000
         decisionPort = 7777
@@ -71,7 +78,8 @@ def station(station):
             data = 'message' + str(seq)
             numBytesTx = txSocket.sendto(data, (REMOTE_HOST, txPort))
             seq = seq + 1
-            if seq % 100 == 0:
+            # select a random RAT if TestMan is disabled
+            if seq % 100 == 0 and testmanEnabled == False:
                 txSocket.sendto(rat[random.randint(0,2)], (REMOTE_HOST, decisionPort))
         except KeyboardInterrupt:
             print "Sending kill to threads..."
