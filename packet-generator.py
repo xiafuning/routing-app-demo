@@ -13,7 +13,7 @@ import threading
 import random
 
 REMOTE_HOST = '127.0.0.1'
-BUFSIZE = 8096
+BUFSIZE = 16000
 NUM_PKTS = 10
 
 #===========================================

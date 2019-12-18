@@ -19,7 +19,7 @@ from Server import UDP_Server
 from signalslot import Slot
 
 REMOTE_HOST = '127.0.0.1'
-BUFSIZE = 8096 # Modify to suit your needs
+BUFSIZE = 16000 # Modify to suit your needs
 
 # set default rat
 decision = 'lte'
@@ -88,10 +88,26 @@ def routing(devType, testmanEnabled):
     # set default rat
     global decision
 
+    '''
     # create uplink thread
     ulThread = threading.Thread(target=ulForward, args=(ltePortRx, wifiPortRX, fgPortRx, rxFwdPort, ), name='ulThread')
     ulThread.setDaemon(True)
     ulThread.start()
+    '''
+    # create lte uplink thread
+    ulLteThread = threading.Thread(target=ulForward, args=(ltePortRx, rxFwdPort, ), name='ulLteThread')
+    ulLteThread.setDaemon(True)
+    ulLteThread.start()
+
+    # create wifi uplink thread
+    ulWifiThread = threading.Thread(target=ulForward, args=(wifiPortRX, rxFwdPort, ), name='ulWifiThread')
+    ulWifiThread.setDaemon(True)
+    ulWifiThread.start()
+
+    # create 5g uplink thread
+    ul5gThread = threading.Thread(target=ulForward, args=(fgPortRx, rxFwdPort, ), name='ul5gThread')
+    ul5gThread.setDaemon(True)
+    ul5gThread.start()
 
     # create downlink data thread
     dlDataThread = threading.Thread(target=dlDataForward, args=(devType, listenDataPort, ltePortTx, wifiPortTx, fgPortTx, ), name='dlDataThread')
@@ -119,7 +135,7 @@ def routing(devType, testmanEnabled):
         print("Receive-Handler established")
         while True:
             try:
-                a = 1
+                time.sleep(1000)
             except KeyboardInterrupt:
                 print "Sending kill to threads..."
                 exit()
@@ -134,6 +150,20 @@ def testmanCallback(packet):
     print type(decision), decision
 
 
+#===========================================
+def ulForward(PortRx, rxFwdPort):
+#===========================================
+    rxSocket = socket(AF_INET, SOCK_DGRAM)
+    rxSocket.bind((REMOTE_HOST, PortRx))
+
+    rxFwdSocket = socket(AF_INET, SOCK_DGRAM)
+
+    while True:
+        data, addr = rxSocket.recvfrom(BUFSIZE)
+        print 'forward', len(data), 'bytes to', (REMOTE_HOST, rxFwdPort)
+        rxFwdSocket.sendto(data, (REMOTE_HOST, rxFwdPort))
+
+'''
 #===========================================
 def ulForward(ltePortRx, wifiPortRX, fgPortRx, rxFwdPort):
 #===========================================
@@ -196,7 +226,8 @@ def ulForward(ltePortRx, wifiPortRX, fgPortRx, rxFwdPort):
         else:
             print 'forward', len(data), 'bytes to', (REMOTE_HOST, rxFwdPort)
             rxFwdSocket.sendto(data, (REMOTE_HOST, rxFwdPort))
-
+        time.sleep(0.001)
+'''
 
 #===========================================
 def dlDataForward(devType, listenDataPort, ltePortTx, wifiPortTx, fgPortTx):
@@ -221,7 +252,8 @@ def sendData(data, rat, ltePortTx, wifiPortTx, fgPortTx):
         numBytesTx = txSocket.sendto(data, (REMOTE_HOST, wifiPortTx))
     elif rat == '5g':
         numBytesTx = txSocket.sendto(data, (REMOTE_HOST, fgPortTx))
-
+    else:
+        print 'Error: RAT type unknown!'
 
 #===========================================
 def helpInfo():
