@@ -39,20 +39,24 @@ def main():
     if len(opts) == 0:
         helpInfo()
         exit()
-    addressTable = {'BS':{'ipAddr':BS_IP, 'ip5gAddr':FG_BS_IP, 'listenDataPort':59998, 'listenDecisionPort':6666, 'ltePortTx':60000, 'wifiPortTx':60001, 'fgPortTx':60002, 'ltePortRx':60010, 'wifiPortRX':60011, 'fgPortRx':60012, 'rxFwdPort':59999}, 'TS':{'ipAddr':TS_IP, 'ip5gAddr':FG_TS_IP, 'listenDataPort':59998, 'listenDecisionPort':7777, 'ltePortTx':60010, 'wifiPortTx':60011, 'fgPortTx':60012, 'ltePortRx':60000, 'wifiPortRX':60001, 'fgPortRx':60002, 'rxFwdPort':59999}}
+    addressTable = {'BS':{'ipAddr':BS_IP, 'ip5gAddr':FG_BS_IP, 'listenDataPort':61000, 'listenDecisionPort':50000, 'ltePortTx':60000, 'wifiPortTx':60001, 'fgPortTx':60002, 'ltePortRx':60010, 'wifiPortRX':60011, 'fgPortRx':60012, 'rxFwdPort':61010}, 'TS':{'ipAddr':TS_IP, 'ip5gAddr':FG_TS_IP, 'listenDataPort':61010, 'listenDecisionPort':50000, 'ltePortTx':60010, 'wifiPortTx':60011, 'fgPortTx':60012, 'ltePortRx':60000, 'wifiPortRX':60001, 'fgPortRx':60002, 'rxFwdPort':61000}}
     # cmd arguments initialization
     devType = 'BS'
+    devSeq = 0
     testmanEnabled = False
     testModeEnabled = False
 
+    # parse cmd arguments
     for name, value in opts:
         if name in ('-h', '--help'):
 	    helpInfo()
             exit()
         elif name in ('-b', '--base'):
             devType = 'BS'
+            devSeq = value;
         elif name in ('-t', '--terminal'):
             devType = 'TS'
+            devSeq = value;
         elif name in ('--testman'):
             testmanEnabled = True
             print 'testman enabled'
@@ -61,7 +65,13 @@ def main():
         else:
             helpInfo()
             exit()
-    
+    # print out config parameters
+    print '----------routing app configuration----------'
+    print 'device tpye:', devType
+    print 'device number:', devSeq
+    print 'testmanEnabled:', testmanEnabled
+    print 'testModeEnabled:', testModeEnabled
+
     # run routing function
     routing(devType, testmanEnabled, testModeEnabled, addressTable[devType])
 
@@ -233,7 +243,14 @@ def sendData(data, rat, ipTx, ip5gTx, ltePortTx, wifiPortTx, fgPortTx):
 #===========================================
 def helpInfo():
 #===========================================
-    print 'Usage: [-h --help] [-b --base] [-t --terminal] [--testman] [--testmode]'
+    print 'Usage: [-h --help] [-b --base <number>] [-t --terminal <number>] [--testman] [--testmode]'
+    print 'Options:'
+    print '\t-b --base\trun in base station mode\t\tDefault: 0'
+    print '\t-t --terminal\trun in terminal station mode\t\tDefault: 0'
+    print '\t--testman\tenable TestMan server\t\t\tDefault: False'
+    print '\t--testmode\trun in test mode\t\t\tDefault: False'
+    print '\t-h --help\tthis help documentation'
+
 
 if __name__ == '__main__':
     main()
