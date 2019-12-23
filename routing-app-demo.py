@@ -25,17 +25,17 @@ FG_BS_IP = ''
 FG_TS_IP = ''
 BUFSIZE = 16000 # Modify to suit your needs
 
-# set default rat
-decision = 'lte'
+# set default command
+command = ''
 
 
 #===========================================
 def main():
 #===========================================
-    opts, argv = getopt.getopt(sys.argv[1:],'-h-b-t',['help', 'base', 'terminal', 'testman', 'testmode'])
+    opts, argv = getopt.getopt(sys.argv[1:],'-h-b:-t:',['help', 'base', 'terminal', 'testman', 'testmode'])
     print 'commandline parameters:'
     print 'argv:', argv
-    print 'opts:', opts
+    print 'opts:', opts, '\n'
     if len(opts) == 0:
         helpInfo()
         exit()
@@ -53,10 +53,10 @@ def main():
             exit()
         elif name in ('-b', '--base'):
             devType = 'BS'
-            devSeq = value;
+            devSeq = int(value)
         elif name in ('-t', '--terminal'):
             devType = 'TS'
-            devSeq = value;
+            devSeq = int(value)
         elif name in ('--testman'):
             testmanEnabled = True
             print 'testman enabled'
@@ -67,17 +67,17 @@ def main():
             exit()
     # print out config parameters
     print '----------routing app configuration----------'
-    print 'device tpye:', devType
-    print 'device number:', devSeq
-    print 'testmanEnabled:', testmanEnabled
-    print 'testModeEnabled:', testModeEnabled
+    print 'device type:\t\t', devType
+    print 'device number:\t\t', devSeq
+    print 'testmanEnabled:\t\t', testmanEnabled
+    print 'testModeEnabled:\t', testModeEnabled, '\n'
 
     # run routing function
-    routing(devType, testmanEnabled, testModeEnabled, addressTable[devType])
+    routing(devType, devSeq, testmanEnabled, testModeEnabled, addressTable[devType])
 
 
 #===========================================
-def routing(devType, testmanEnabled, testModeEnabled, addressTable):
+def routing(devType, devSeq, testmanEnabled, testModeEnabled, addressTable):
 #===========================================
     if devType == 'BS':
         if testModeEnabled == True:
@@ -138,8 +138,8 @@ def routing(devType, testmanEnabled, testModeEnabled, addressTable):
             #print addressTable
             #exit()
 
-    # set default rat
-    global decision
+    # set default command
+    global command
 
     # create lte uplink thread
     ulLteThread = threading.Thread(target=ulForward, args=(ipAddr, ltePortRx, rxFwdPort, ), name='ulLteThread')
@@ -157,7 +157,7 @@ def routing(devType, testmanEnabled, testModeEnabled, addressTable):
     ul5gThread.start()
 
     # create downlink data thread
-    dlDataThread = threading.Thread(target=dlDataForward, args=(devType, listenDataPort, ipAddr, ip5gAddr, ltePortTx, wifiPortTx, fgPortTx, ), name='dlDataThread')
+    dlDataThread = threading.Thread(target=dlDataForward, args=(devType, devSeq, listenDataPort, ipAddr, ip5gAddr, ltePortTx, wifiPortTx, fgPortTx, ), name='dlDataThread')
     dlDataThread.setDaemon(True)
     dlDataThread.start()
 
@@ -169,7 +169,7 @@ def routing(devType, testmanEnabled, testModeEnabled, addressTable):
         while True:
             try:
                 data, addr = listenDecisionSocket.recvfrom(BUFSIZE)
-                decision = data
+                command = data
             except KeyboardInterrupt:
                 print 'Sending kill to threads...'
                 exit()
@@ -192,10 +192,9 @@ def routing(devType, testmanEnabled, testModeEnabled, addressTable):
 def testmanCallback(packet):
 #===========================================
     print '\n=== Received packet =============='
-    # print type(packet.Command), packet.Command
-    global decision
-    decision = str(packet.Command)
-    print type(decision), decision
+    global command
+    command = str(packet.Command)
+    print 'received command:', command
 
 
 #===========================================
@@ -213,16 +212,44 @@ def ulForward(ipRx, PortRx, rxFwdPort):
 
 
 #===========================================
-def dlDataForward(devType, listenDataPort, ipTx, ip5gTx, ltePortTx, wifiPortTx, fgPortTx):
+def dlDataForward(devType, devSeq, listenDataPort, ipTx, ip5gTx, ltePortTx, wifiPortTx, fgPortTx):
 #===========================================
-    global decision
     listenDataSocket = socket(AF_INET, SOCK_DGRAM)
     listenDataSocket.bind((REMOTE_HOST, listenDataPort))
 
     while True:
         data, addr = listenDataSocket.recvfrom(BUFSIZE)
+        decision = resolveCommand(devType, devSeq)
         print devType, 'forward a packet using', decision
-        sendData(data, decision,ipTx, ip5gTx, ltePortTx, wifiPortTx, fgPortTx)
+        sendData(data, decision, ipTx, ip5gTx, ltePortTx, wifiPortTx, fgPortTx)
+
+
+#===========================================
+def resolveCommand(devType, devSeq):
+#===========================================
+    global command
+    if command == '':
+        print 'set default decision to lte'
+        decision = 'lte'
+        return decision
+    if command[0] == devType[0] and int(command[2]) == devSeq:
+        if command[21] == 'L':
+            decision = 'lte'
+        elif command[21] == 'W':
+            decision = 'wifi'
+        elif command[21] == '5':
+            decision = '5g'
+        else:
+            print 'Error: invalid command format!'
+            print 'set default decision to lte'
+            decision = 'lte'
+            command = ''
+    else:
+        print 'not for me, drop command'
+        print 'set default decision to lte'
+        decision = 'lte'
+        command = ''
+    return decision
 
 
 #===========================================
