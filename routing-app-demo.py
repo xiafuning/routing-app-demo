@@ -25,9 +25,9 @@ FG_BS_IP = ''
 FG_TS_IP = ''
 BUFSIZE = 16000 # Modify to suit your needs
 
-# set default command
+# set default command and decision
 command = ''
-
+decision = ''
 
 #===========================================
 def main():
@@ -85,7 +85,7 @@ def routing(devType, devSeq, testmanEnabled, testModeEnabled, addressTable):
             ipAddr = REMOTE_HOST
             ip5gAddr = REMOTE_HOST
             listenDataPort = 4000
-            listenDecisionPort = 6666
+            listenDecisionPort = 50000
             ltePortTx = 8990
             wifiPortTx = 8991
             fgPortTx = 8992
@@ -114,7 +114,7 @@ def routing(devType, devSeq, testmanEnabled, testModeEnabled, addressTable):
             ipAddr = REMOTE_HOST
             ip5gAddr = REMOTE_HOST
             listenDataPort = 3000
-            listenDecisionPort = 7777
+            listenDecisionPort = 50000
             ltePortTx = 7990
             wifiPortTx = 7991
             fgPortTx = 7992
@@ -214,12 +214,13 @@ def ulForward(ipRx, PortRx, rxFwdPort):
 #===========================================
 def dlDataForward(devType, devSeq, listenDataPort, ipTx, ip5gTx, ltePortTx, wifiPortTx, fgPortTx):
 #===========================================
+    global decision
     listenDataSocket = socket(AF_INET, SOCK_DGRAM)
     listenDataSocket.bind((REMOTE_HOST, listenDataPort))
 
     while True:
         data, addr = listenDataSocket.recvfrom(BUFSIZE)
-        decision = resolveCommand(devType, devSeq)
+        resolveCommand(devType, devSeq)
         print devType, 'forward a packet using', decision
         sendData(data, decision, ipTx, ip5gTx, ltePortTx, wifiPortTx, fgPortTx)
 
@@ -228,28 +229,42 @@ def dlDataForward(devType, devSeq, listenDataPort, ipTx, ip5gTx, ltePortTx, wifi
 def resolveCommand(devType, devSeq):
 #===========================================
     global command
+    global decision
     if command == '':
         print 'set default decision to lte'
         decision = 'lte'
-        return decision
-    if command[0] == devType[0] and int(command[2]) == devSeq:
-        if command[21] == 'L':
-            decision = 'lte'
-        elif command[21] == 'W':
-            decision = 'wifi'
-        elif command[21] == '5':
-            decision = '5g'
+        return
+    if devType == 'BS':
+        if command[0] == devType[0] and int(command[2]) == devSeq:
+            if command[21] == 'L':
+                decision = 'lte'
+            elif command[21] == 'W':
+                decision = 'wifi'
+            elif command[21] == '5':
+                decision = '5g'
+            else:
+                print 'Error: invalid command format!'
+                print 'set default decision to lte'
+                decision = 'lte'
+                command = ''
         else:
-            print 'Error: invalid command format!'
-            print 'set default decision to lte'
-            decision = 'lte'
-            command = ''
-    else:
-        print 'not for me, drop command'
-        print 'set default decision to lte'
-        decision = 'lte'
-        command = ''
-    return decision
+            print 'not for me, drop command'
+    elif devType == 'TS':
+        if command[0] == devType[0] and int(command[2]) == devSeq:
+            if command[len(command) - 1] == 'E':
+                decision = 'lte'
+            elif command[len(command) - 1] == 'I':
+                decision = 'wifi'
+            elif command[len(command) - 1] == 'g':
+                decision = '5g'
+            else:
+                print 'Error: invalid command format!'
+                print 'set default decision to lte'
+                decision = 'lte'
+                command = ''
+        else:
+            print 'not for me, drop command'
+    return
 
 
 #===========================================
