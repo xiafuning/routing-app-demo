@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 #
-#About: a routing application demo script
+#About: a routing application script
 #
 
 import sys
@@ -19,10 +19,10 @@ from Server import UDP_Server
 from signalslot import Slot
 
 REMOTE_HOST = '127.0.0.1'
-BS_IP = ''
-TS_IP = ''
-FG_BS_IP = ''
-FG_TS_IP = ''
+BS_IP = REMOTE_HOST     # need to be modified
+TS_IP = REMOTE_HOST     # need to be modified
+FG_BS_IP = REMOTE_HOST  # need to be modified
+FG_TS_IP = REMOTE_HOST  # need to be modified
 BUFSIZE = 16000 # Modify to suit your needs
 
 # set default command and decision
@@ -32,7 +32,7 @@ decision = ''
 #===========================================
 def main():
 #===========================================
-    opts, argv = getopt.getopt(sys.argv[1:],'-h-b:-t:',['help', 'base', 'terminal', 'testman', 'testmode'])
+    opts, argv = getopt.getopt(sys.argv[1:],'-h-b:-t:-l:',['help', 'base', 'terminal', 'testman', 'testmode', 'logging'])
     print 'commandline parameters:'
     print 'argv:', argv
     print 'opts:', opts, '\n'
@@ -45,6 +45,8 @@ def main():
     devSeq = 0
     testmanEnabled = False
     testModeEnabled = False
+    dlLoggingEnabled = False
+    ulLoggingEnabled = False
 
     # parse cmd arguments
     for name, value in opts:
@@ -62,22 +64,33 @@ def main():
             print 'testman enabled'
         elif name in ('--testmode'):
             testModeEnabled = True
+        elif name in ('-l', '--logging') and value == 'DL' and devType == 'BS':
+            dlLoggingEnabled = True
+        elif name in ('-l', '--logging') and value == 'DL' and devType == 'TS':
+            ulLoggingEnabled = True
+        elif name in ('-l', '--logging') and value == 'UL' and devType == 'BS':
+            ulLoggingEnabled = True
+        elif name in ('-l', '--logging') and value == 'UL' and devType == 'TS':
+            dlLoggingEnabled = True
         else:
             helpInfo()
             exit()
+
     # print out config parameters
     print '----------routing app configuration----------'
     print 'device type:\t\t', devType
     print 'device number:\t\t', devSeq
     print 'testmanEnabled:\t\t', testmanEnabled
-    print 'testModeEnabled:\t', testModeEnabled, '\n'
+    print 'testModeEnabled:\t', testModeEnabled
+    print 'dlLoggingEnabled:\t', dlLoggingEnabled
+    print 'ulLoggingEnabled:\t', ulLoggingEnabled, '\n'
 
     # run routing function
-    routing(devType, devSeq, testmanEnabled, testModeEnabled, addressTable[devType])
+    routing(devType, devSeq, testmanEnabled, testModeEnabled, dlLoggingEnabled, ulLoggingEnabled, addressTable[devType])
 
 
 #===========================================
-def routing(devType, devSeq, testmanEnabled, testModeEnabled, addressTable):
+def routing(devType, devSeq, testmanEnabled, testModeEnabled, dlLoggingEnabled, ulLoggingEnabled, addressTable):
 #===========================================
     if devType == 'BS':
         if testModeEnabled == True:
@@ -142,22 +155,22 @@ def routing(devType, devSeq, testmanEnabled, testModeEnabled, addressTable):
     global command
 
     # create lte uplink thread
-    ulLteThread = threading.Thread(target=ulForward, args=(ipAddr, ltePortRx, rxFwdPort, ), name='ulLteThread')
+    ulLteThread = threading.Thread(target=ulForward, args=(ipAddr, ltePortRx, rxFwdPort, ulLoggingEnabled), name='ulLteThread')
     ulLteThread.setDaemon(True)
     ulLteThread.start()
 
     # create wifi uplink thread
-    ulWifiThread = threading.Thread(target=ulForward, args=(ipAddr, wifiPortRX, rxFwdPort, ), name='ulWifiThread')
+    ulWifiThread = threading.Thread(target=ulForward, args=(ipAddr, wifiPortRX, rxFwdPort, ulLoggingEnabled), name='ulWifiThread')
     ulWifiThread.setDaemon(True)
     ulWifiThread.start()
 
     # create 5g uplink thread
-    ul5gThread = threading.Thread(target=ulForward, args=(ip5gAddr, fgPortRx, rxFwdPort, ), name='ul5gThread')
+    ul5gThread = threading.Thread(target=ulForward, args=(ip5gAddr, fgPortRx, rxFwdPort, ulLoggingEnabled), name='ul5gThread')
     ul5gThread.setDaemon(True)
     ul5gThread.start()
 
     # create downlink data thread
-    dlDataThread = threading.Thread(target=dlDataForward, args=(devType, devSeq, listenDataPort, ipAddr, ip5gAddr, ltePortTx, wifiPortTx, fgPortTx, ), name='dlDataThread')
+    dlDataThread = threading.Thread(target=dlDataForward, args=(devType, devSeq, listenDataPort, ipAddr, ip5gAddr, ltePortTx, wifiPortTx, fgPortTx, dlLoggingEnabled), name='dlDataThread')
     dlDataThread.setDaemon(True)
     dlDataThread.start()
 
@@ -198,7 +211,7 @@ def testmanCallback(packet):
 
 
 #===========================================
-def ulForward(ipRx, PortRx, rxFwdPort):
+def ulForward(ipRx, PortRx, rxFwdPort, ulLoggingEnabled):
 #===========================================
     rxSocket = socket(AF_INET, SOCK_DGRAM)
     rxSocket.bind((ipRx, PortRx))
@@ -207,12 +220,14 @@ def ulForward(ipRx, PortRx, rxFwdPort):
 
     while True:
         data, addr = rxSocket.recvfrom(BUFSIZE)
-        print 'forward', len(data), 'bytes to', (REMOTE_HOST, rxFwdPort)
+        if ulLoggingEnabled == True:
+            print '[RX] receive', len(data), 'bytes at', (ipRx, PortRx)
+            print '[RX] forward', len(data), 'bytes to', (REMOTE_HOST, rxFwdPort)
         rxFwdSocket.sendto(data, (REMOTE_HOST, rxFwdPort))
 
 
 #===========================================
-def dlDataForward(devType, devSeq, listenDataPort, ipTx, ip5gTx, ltePortTx, wifiPortTx, fgPortTx):
+def dlDataForward(devType, devSeq, listenDataPort, ipTx, ip5gTx, ltePortTx, wifiPortTx, fgPortTx, dlLoggingEnabled):
 #===========================================
     global decision
     listenDataSocket = socket(AF_INET, SOCK_DGRAM)
@@ -221,7 +236,8 @@ def dlDataForward(devType, devSeq, listenDataPort, ipTx, ip5gTx, ltePortTx, wifi
     while True:
         data, addr = listenDataSocket.recvfrom(BUFSIZE)
         resolveCommand(devType, devSeq)
-        print devType, 'forward a packet using', decision
+        if dlLoggingEnabled == True:
+            print '[TX]', devType,devSeq, 'forward a packet using', decision
         sendData(data, decision, ipTx, ip5gTx, ltePortTx, wifiPortTx, fgPortTx)
 
 
@@ -255,7 +271,7 @@ def resolveCommand(devType, devSeq):
                 decision = 'lte'
             elif command[len(command) - 1] == 'I':
                 decision = 'wifi'
-            elif command[len(command) - 1] == 'g':
+            elif command[len(command) - 1] == 'G':
                 decision = '5g'
             else:
                 print 'Error: invalid command format!'
@@ -285,12 +301,13 @@ def sendData(data, rat, ipTx, ip5gTx, ltePortTx, wifiPortTx, fgPortTx):
 #===========================================
 def helpInfo():
 #===========================================
-    print 'Usage: [-h --help] [-b --base <number>] [-t --terminal <number>] [--testman] [--testmode]'
+    print 'Usage: [-h --help] [-b --base <number>] [-t --terminal <number>] [--testman] [--testmode] [-l --logging <link type: DL/UL>]'
     print 'Options:'
     print '\t-b --base\trun in base station mode\t\tDefault: 0'
     print '\t-t --terminal\trun in terminal station mode\t\tDefault: 0'
     print '\t--testman\tenable TestMan server\t\t\tDefault: False'
     print '\t--testmode\trun in test mode\t\t\tDefault: False'
+    print '\t-l --logging\tenable logging outputs\t\t\tDefault: False'
     print '\t-h --help\tthis help documentation'
 
 
